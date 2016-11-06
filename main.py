@@ -79,20 +79,22 @@ def get_userinfo(tname, token):
     
     thread_data = threading.local()
     thread_data.cursor = None
-    counter = 0
+    thread_data.counter = 0
 
     while True:
         # Check if new db handle is available after certain frequency
-        max_check_interval = 300
-        counter += 1
+        max_check_interval = 3500
+        thread_data.counter += 1
         with v:
             # get new db handle
-            if counter % max_check_interval == 0:
+            if thread_data.counter % max_check_interval == 0:
                 logging.warning('{0}:- Hollering for Db Refresh'.format(tname))
                 with u:
                     u.notify_all()
                 logging.warning('{0}:- Worker thread wait reached'.format(tname))
-                if  v.wait():
+                ret = v.wait()
+                if ret:
+                    print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(tname, db_user, db_pass))
                     thread_data.cursor = refresh_cursor(tname, thread_data.cursor)
 
         #time.sleep(random.uniform(1,3))
@@ -120,7 +122,6 @@ def get_someuser(cursor, tname):
        logging.error('{0}:- Could not execite the statement. Exception: {1}'.format(tname, ex))
        return False
    else:
-       print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(tname, db_user, db_pass))
        print('{0}:- Got User: {1}\n'.format(tname, cursor.fetchone()[0]))
        return True
 
@@ -153,8 +154,8 @@ def main():
     # when they want to refresh the connection handle
     u = threading.Condition()
 
-    thread_names = ('T1',)
-    #thread_names = ('T1', 'T2', 'T3', 'T4')
+    #thread_names = ('T1',)
+    thread_names = ('T1', 'T2', 'T3', 'T4')
 
     threads = list()
 
