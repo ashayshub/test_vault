@@ -3,9 +3,11 @@
 # Date: 29.10.2016
 # Program to test multithreaded secret handling with vault
 # Imp: Though psyscopg2 itself is threadsafe, cursors from psyscopg2 are not
+#
 # After a certain frequency (max_check_interval), each 
 # thread requests a new dbhandle and creates a cursor from it
-
+# Vault needs to be running on  local 8200 before starting this program.
+#
 import time
 import random
 import os
