@@ -15,21 +15,24 @@ import queue
 import hvac
 
 class MyThread (threading.Thread):
-    def __init__(self, threadID, name, func):
+    def __init__(self, threadID, name, func, token):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
         self.func = func
+        self.token = token
 
     def run(self):
         logging.warning ("Starting " + self.name + '\n')
-        self.func(self.name)
+        self.func(self.name, self.token)
         logging.warning ("Exiting " + self.name)
 
-def refresh_dbconn(tname):
+def refresh_dbconn(tname, vault_token):
     """function to connect to db and refresh the details every 15 sec"""
     # get DB conn
-    client = hvac.Client(url='http://localhost:8200', token='5e980c52-4631-176c-fdf8-3a5765b3d449')
+
+    vault_url = 'http://localhost:8200'
+    client = hvac.Client(url=vault_url, token=vault_token)
     while True:
         with u:
             logging.warning('{0}:- Waiting on threads'.format(tname))
@@ -51,6 +54,7 @@ def get_dbconn(tname):
    connect_str = "dbname='{0}' user='{1}' host='{2}' password='{3}'".format(
                   arg.db_name, db_user, arg.db_host, db_pass)
    print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(tname, db_user, db_pass))
+
    try:
        conn = psycopg2.connect(connect_str)
    except Exception as ex:
@@ -67,7 +71,7 @@ def get_secret_backend(tname, client):
     db_pass = cred['data']['password']
     pass
 
-def get_userinfo(tname):
+def get_userinfo(tname, token):
     """ Function to start threads that query db """
     
     thread_data = threading.local()
@@ -121,9 +125,8 @@ def parse_arguments():
 
    parser = argparse.ArgumentParser(description='Vault Multithread secret handling')
    parser.add_argument('--db-host', '-l', required=True, help="db host")
-   #parser.add_argument('--db-user', '-u', required=True, help="db user")
-   #parser.add_argument('--db-pass', '-p', required=True, help="db pass")
    parser.add_argument('--db-name', '-n', required=True, help="db name")
+   parser.add_argument('--vault-token', '-t', required=True, help="vault token id")
    return parser.parse_args()
 
 def main():
@@ -134,22 +137,32 @@ def main():
     conn = None
     arg = parse_arguments()
     sys_q = queue.Queue()
+
+    #lock for looking into the db connection error.
     e = threading.RLock()
+    
+    # Condition to wake up all threads from db threads
+    # when the db thread is ready with the connection handle
     v = threading.Condition()
+
+    # Condition to wake up db thread from other threads 
+    # when they want to refresh the connection handle
     u = threading.Condition()
-    thread_names = ('T1', 'T2', 'T3', 'T4')
+
     #thread_names = ('T1',)
+    thread_names = ('T1', 'T2', 'T3', 'T4')
+
     threads = list()
 
     # start threads
 
     # db thread
-    db_thread = MyThread(77, 'DB', refresh_dbconn)
+    db_thread = MyThread(77, 'DB', refresh_dbconn, arg.vault_token)
     db_thread.start()
 
     # worker thread
     for i, name in enumerate(thread_names):
-       threads.append(MyThread(i, name, get_userinfo))
+       threads.append(MyThread(i, name, get_userinfo, None))
        threads[i].start()
 
     # exit on wrong db creds
