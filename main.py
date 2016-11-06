@@ -3,6 +3,8 @@
 # Date: 29.10.2016
 # Program to test multithreaded secret handling with vault
 # Imp: Though psyscopg2 itself is threadsafe, cursors from psyscopg2 are not
+# After a certain frequency (max_check_interval), each 
+# thread requests a new dbhandle and creates a cursor from it
 
 import time
 import random
@@ -36,8 +38,8 @@ def refresh_dbconn(tname, vault_token):
     while True:
         with u:
             logging.warning('{0}:- Db thread Waiting on worker threads'.format(tname))
-            ret = u.wait()
-            if ret:
+            myret = u.wait()
+            if myret:
                 with v:
                     get_secret_backend(tname, client)
                     ret = get_dbconn(tname)
@@ -83,12 +85,12 @@ def get_userinfo(tname, token):
 
     while True:
         # Check if new db handle is available after certain frequency
-        max_check_interval = 3500
+        max_check_interval = 35000
         counter += 1
         with v:
             # get new db handle
             if counter % max_check_interval == 0:
-                logging.warning('{0}:- Hollering for Db Refresh'.format(tname))
+                logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))
                 with u:
                     u.notify_all()
                 logging.warning('{0}:- Worker thread wait reached'.format(tname))
