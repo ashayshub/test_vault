@@ -35,19 +35,20 @@ def refresh_dbconn(tname, vault_token):
     client = hvac.Client(url=vault_url, token=vault_token)
     while True:
         with u:
-            logging.warning('{0}:- Waiting on threads'.format(tname))
-            u.wait()
-            with v:
-                get_secret_backend(tname, client)
-                ret = get_dbconn(tname)
-                if not ret:
-                    with e:
-                        logging.warning('{0}:- Putting db handle false on queue'.format(tname))
-                        sys_q.put(False)
-                else:
-                    logging.warning('{0}:- Notifying all threads'.format(tname))
-                    v.notify_all()
-
+            logging.warning('{0}:- Db thread Waiting on worker threads'.format(tname))
+            ret = u.wait()
+            if ret:
+                with v:
+                    get_secret_backend(tname, client)
+                    ret = get_dbconn(tname)
+                    if not ret:
+                        with e:
+                            logging.warning('{0}:- Putting db handle false on queue'.format(tname))
+                            sys_q.put(False)
+                    else:
+                        logging.warning('{0}:- Notifying all threads'.format(tname))
+                        v.notify_all()
+                        
 def get_dbconn(tname):
    """ Connects to db and returns db connection """
    global conn
@@ -65,11 +66,13 @@ def get_dbconn(tname):
        return conn
 
 def get_secret_backend(tname, client):
+    """Get secret creds for psql db"""
+
     global db_user, db_pass
     cred = client.read('postgresql/creds/readonly')
     db_user = cred['data']['username']
     db_pass = cred['data']['password']
-    pass
+    return True
 
 def get_userinfo(tname, token):
     """ Function to start threads that query db """
@@ -80,13 +83,16 @@ def get_userinfo(tname, token):
 
     while True:
         # Check if new db handle is available after certain frequency
+        max_check_interval = 300
         counter += 1
         with v:
-            with u:
-                # get new db handle
-                if counter % 20 == 0:
-                    logging.warning('{0}:- Db Refresh, thread wait reached'.format(tname))
-                    u.notify_all() and v.wait()
+            # get new db handle
+            if counter % max_check_interval == 0:
+                logging.warning('{0}:- Hollering for Db Refresh'.format(tname))
+                with u:
+                    u.notify_all()
+                logging.warning('{0}:- Worker thread wait reached'.format(tname))
+                if  v.wait():
                     thread_data.cursor = refresh_cursor(tname, thread_data.cursor)
 
         #time.sleep(random.uniform(1,3))
@@ -105,8 +111,6 @@ def get_someuser(cursor, tname):
    """ Gets some random user and from Db """
    if not cursor:
        logging.warning('{0}:- No cursor here..'.format(tname))
-       with u:
-           u.notify_all()
        return False
    sql = 'SELECT uname FROM test_users WHERE uname=\'ashay\' LIMIT 1';
    try:
@@ -149,8 +153,8 @@ def main():
     # when they want to refresh the connection handle
     u = threading.Condition()
 
-    #thread_names = ('T1',)
-    thread_names = ('T1', 'T2', 'T3', 'T4')
+    thread_names = ('T1',)
+    #thread_names = ('T1', 'T2', 'T3', 'T4')
 
     threads = list()
 
