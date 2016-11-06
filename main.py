@@ -79,15 +79,15 @@ def get_userinfo(tname, token):
     
     thread_data = threading.local()
     thread_data.cursor = None
-    thread_data.counter = 0
+    counter = 0
 
     while True:
         # Check if new db handle is available after certain frequency
         max_check_interval = 3500
-        thread_data.counter += 1
+        counter += 1
         with v:
             # get new db handle
-            if thread_data.counter % max_check_interval == 0:
+            if counter % max_check_interval == 0:
                 logging.warning('{0}:- Hollering for Db Refresh'.format(tname))
                 with u:
                     u.notify_all()
