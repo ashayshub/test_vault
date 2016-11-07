@@ -5,7 +5,7 @@
 # Imp: Though psyscopg2 itself is threadsafe, cursors from psyscopg2 are not
 #
 # After a certain frequency (max_check_interval), one of the 
-# threads requests a new dbhandle and creates a cursor from it
+# threads requests a new dbhandle and each thread then creates a cursor from it
 # Keep max_check_interval higher to refresh db handle over a lower frequency.
 #
 # Vault needs to be running on  local 8200 before starting this program.
