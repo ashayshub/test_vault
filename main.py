@@ -19,19 +19,20 @@ import queue
 import hvac
 
 class MyThread (threading.Thread):
-    def __init__(self, threadID, name, func, token):
+    def __init__(self, threadID, name, func, token, refresh):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.name = name
         self.func = func
         self.token = token
+        self.refresh = refresh
 
     def run(self):
         logging.warning ("Starting " + self.name + '\n')
-        self.func(self.name, self.token)
+        self.func(self.name, self.token, self.refresh)
         logging.warning ("Exiting " + self.name)
 
-def refresh_dbconn(tname, vault_token):
+def refresh_dbconn(tname, vault_token, refresh):
     """function to connect to db and refresh the details every 15 sec"""
     # get DB conn
 
@@ -78,7 +79,7 @@ def get_secret_backend(tname, client):
     db_pass = cred['data']['password']
     return True
 
-def get_userinfo(tname, token):
+def get_userinfo(tname, token, refresh):
     """ Function to start threads that query db """
     
     thread_data = threading.local()
@@ -92,9 +93,13 @@ def get_userinfo(tname, token):
         with v:
             # get new db handle
             if counter % max_check_interval == 0:
-                logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))
-                with u:
-                    u.notify_all()
+                # only the first thread is designated to refresh db handle
+                if refresh:
+                    logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))
+                    with u:
+                        u.notify_all()
+
+                # All threads wait for db to notify
                 logging.warning('{0}:- Worker thread wait reached'.format(tname))
                 ret = v.wait()
                 if ret:
@@ -162,17 +167,22 @@ def main():
     thread_names = ('T1', 'T2', 'T3', 'T4')
 
     threads = list()
-
+    
     # start threads
 
     # db thread
-    db_thread = MyThread(77, 'DB', refresh_dbconn, arg.vault_token)
+    db_thread = MyThread(77, 'DB', refresh_dbconn, arg.vault_token, None)
     db_thread.start()
 
     # worker thread
+    
     for i, name in enumerate(thread_names):
-       threads.append(MyThread(i, name, get_userinfo, None))
-       threads[i].start()
+        # first thread does db handle refresh
+        db_refresh = False
+        if i == 0:
+            db_refresh = True
+        threads.append(MyThread(i, name, get_userinfo, None, db_refresh))
+        threads[i].start()
 
     # exit on wrong db creds
     # ToDo handle exit more gracefuly. 
