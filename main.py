@@ -130,7 +130,7 @@ def get_someuser(cursor, tname):
    if not cursor:
        logging.warning('{0}:- No cursor here..'.format(tname))
        return False
-   sql = 'SELECT uname FROM test_users WHERE uname=\'ashay\' LIMIT 1';
+   sql = 'SELECT uname FROM test_users WHERE uname=\'testuser\' LIMIT 1';
    try:
        cursor.execute(sql)
    except Exception as ex:
