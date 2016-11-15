@@ -54,9 +54,8 @@ def refresh_dbconn(tname, vault_token, refresh):
                     get_secret_backend(tname, client)
                     ret = get_dbconn(tname)
                     if not ret:
-                        with e:
-                            logging.warning('{0}:- Putting db handle false on queue'.format(tname))
-                            sys_q.put(False)
+                        logging.warning('{0}:- Putting db handle false on queue'.format(tname))
+                        sys_q.put(False)
                     else:
                         logging.warning('{0}:- Notifying all threads'.format(tname))
                         v.notify_all()
@@ -158,9 +157,6 @@ def main():
     conn = None
     arg = parse_arguments()
     sys_q = queue.Queue()
-
-    #lock for looking into the db connection error.
-    e = threading.RLock()
     
     # Condition to wake up all threads from db threads
     # when the db thread is ready with the connection handle
@@ -197,10 +193,9 @@ def main():
     while True:
         time.sleep(2)
         logging.warning('checking sys queue')
-        with e:
-            if sys_q.get() is False: 
-                logging.warning('DB Auth failed. Hence got "False" on sys queue. Exiting....')
-                os._exit(1)
+        if sys_q.get() is False: 
+            logging.warning('DB Auth failed. Hence got "False" on sys queue. Exiting....')
+            os._exit(1)
 
     # join threads
     db_thread.join()
