@@ -49,6 +49,8 @@ def refresh_dbconn(tname, vault_token, refresh):
         with u:
             logging.warning('{0}:- Db thread Waiting on worker threads'.format(tname))
             myret = u.wait()
+            time.sleep(2)
+            logging.warning('{0}:- Woke up from a worker thread'.format(tname))            
             if myret:
                 with v:
                     get_secret_backend(tname, client)
@@ -85,6 +87,14 @@ def get_secret_backend(tname, client):
     db_pass = cred['data']['password']
     return True
 
+def wait_worker_thread(t_name, cursor):
+    wait_q.put(t_name)
+    ret = v.wait()
+    if ret:
+        print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(t_name, db_user, db_pass))
+        thread_data.cursor = refresh_cursor(t_name, cursor)
+    
+
 def get_userinfo(tname, token, refresh):
     """ Function to start threads that query db """
     
@@ -96,21 +106,21 @@ def get_userinfo(tname, token, refresh):
         # Check if new db handle is available after certain frequency
         max_check_interval = 5
         counter += 1
+            
         with v:
+            # The last thread that checks will call the db to refresh itself and wait on it.
+            # The last thread will not wait on the max_check_interval to expire
+            if wait_q.qsize() == c - 1:
+                with u:
+                    logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))                    
+                    u.notify_all()
+                wait_worker_thread(tname, thread_data.cursor)
+                
             # get new db handle
             if counter % max_check_interval == 0:
-                # only the first thread is designated to refresh db handle
-                if refresh:
-                    logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))
-                    with u:
-                        u.notify_all()
-
                 # All threads wait for db to notify
                 logging.warning('{0}:- Worker thread wait reached'.format(tname))
-                ret = v.wait()
-                if ret:
-                    print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(tname, db_user, db_pass))
-                    thread_data.cursor = refresh_cursor(tname, thread_data.cursor)
+                wait_worker_thread(tname, thread_data.cursor)
 
         time.sleep(random.uniform(1,3))
         get_someuser(thread_data.cursor, tname)
@@ -152,11 +162,12 @@ def parse_arguments():
 def main():
     """ Main func """
     
-    global conn, arg, sys_q, e, v, u
+    global conn, arg, wait_q, sys_q, e, v, u, c
 
     conn = None
     arg = parse_arguments()
     sys_q = queue.Queue()
+    wait_q = queue.Queue()
     
     # Condition to wake up all threads from db threads
     # when the db thread is ready with the connection handle
@@ -168,6 +179,8 @@ def main():
 
     #thread_names = ('T1',)
     thread_names = ('T1', 'T2', 'T3', 'T4')
+    c = len(thread_names)
+    [wait_q.put(item) for item in thread_names]
 
     threads = list()
     
