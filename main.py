@@ -48,6 +48,8 @@ def refresh_dbconn(tname, vault_token, refresh):
             myret = u.wait()
             if myret:
                 process_dbconn_request(tname, vault_token)
+
+                
 def process_dbconn_request(tname, vault_token):
     """Connect to vault, get new creds and get db handle"""
     logging.warning('{0}:- Woke up from a worker thread'.format(tname))
@@ -115,8 +117,8 @@ def get_userinfo(tname, token, refresh):
         with v:
             # The last thread that checks will call the db to refresh itself and wait on it.
             # The last thread will not wait on the max_check_interval to expire
-                
             # Wake up DB thread for a new db handle
+            
             if counter % max_check_interval == 0:
                 # All threads wait for db to notify
                 logging.warning('{0}:- Worker thread wait reached. Wait Qsize {1}, ThreadCount: {2}'.format(tname, wait_q.qsize(), c))
@@ -152,7 +154,7 @@ def get_someuser(cursor, tname):
        return False
    else:
        data = cursor.fetchone()
-       if type(data) == tuple and len(data) > 0:
+       if data is not None and len(data) > 0:
            print('{0}:- Got User: {1}\n'.format(tname, data[0]))
        return True
 
