@@ -49,7 +49,6 @@ def refresh_dbconn(tname, vault_token, refresh):
         with u:
             logging.warning('{0}:- Db thread Waiting on worker threads'.format(tname))
             myret = u.wait()
-            time.sleep(2)
             logging.warning('{0}:- Woke up from a worker thread'.format(tname))            
             if myret:
                 with v:
@@ -60,6 +59,7 @@ def refresh_dbconn(tname, vault_token, refresh):
                         sys_q.put(False)
                     else:
                         logging.warning('{0}:- Notifying all threads'.format(tname))
+                        time.sleep(2)
                         v.notify_all()
                         with wait_q.mutex:
                             wait_q.queue.clear()
@@ -89,12 +89,12 @@ def get_secret_backend(tname, client):
     db_pass = cred['data']['password']
     return True
 
-def wait_worker_thread(t_name, cursor):
+def wait_worker_thread(t_name, thread_data):
     wait_q.put(t_name)
     ret = v.wait()
     if ret:
         print('{0}:- Using DBuser: {1}, DBpass: {2}'.format(t_name, db_user, db_pass))
-        thread_data.cursor = refresh_cursor(t_name, cursor)
+        thread_data.cursor = refresh_cursor(t_name, thread_data.cursor)
     
 
 def get_userinfo(tname, token, refresh):
@@ -112,18 +112,17 @@ def get_userinfo(tname, token, refresh):
         with v:
             # The last thread that checks will call the db to refresh itself and wait on it.
             # The last thread will not wait on the max_check_interval to expire
-            if wait_q.qsize() == c - 1:
-                with u:
-                    logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))                    
-                    u.notify_all()
-                wait_worker_thread(tname, thread_data.cursor)
                 
-            # get new db handle
+            # Wake up DB thread for a new db handle
             if counter % max_check_interval == 0:
                 # All threads wait for db to notify
-                logging.warning('{0}:- Worker thread wait reached'.format(tname))
-                wait_worker_thread(tname, thread_data.cursor)
-
+                logging.warning('{0}:- Worker thread wait reached. Wait Qsize {1}, ThreadCount: {2}'.format(tname, wait_q.qsize(), c))
+                if wait_q.qsize() >= c - 1:
+                    with u:
+                        logging.warning('{0}:- Hollering for Db Refresh. Counter: {1}'.format(tname, counter))                    
+                        u.notify_all()
+                wait_worker_thread(tname, thread_data)
+                
         time.sleep(random.uniform(1,3))
         get_someuser(thread_data.cursor, tname)
             
@@ -150,7 +149,7 @@ def get_someuser(cursor, tname):
        return False
    else:
        data = cursor.fetchone()
-       if type(data) == list and len(data) > 0:
+       if type(data) == tuple and len(data) > 0:
            print('{0}:- Got User: {1}\n'.format(tname, data[0]))
        return True
 
@@ -184,7 +183,7 @@ def main():
     #thread_names = ('T1',)
     thread_names = ('T1', 'T2', 'T3', 'T4')
     c = len(thread_names)
-    [wait_q.put(item) for item in thread_names]
+    #[wait_q.put(item) for item in thread_names]
 
     threads = list()
     
