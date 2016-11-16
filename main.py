@@ -39,31 +39,34 @@ class MyThread (threading.Thread):
         self.func(self.name, self.token, self.refresh)
         logging.warning ("Exiting " + self.name)
 
-def refresh_dbconn(tname, vault_token, refresh):
-    """function to connect to db and refresh the details every 15 sec"""
-    # get DB conn
-
+def process_dbconn_request(tname, vault_token):
+    """Connect to vault, get new creds and get db handle"""
+    logging.warning('{0}:- Woke up from a worker thread'.format(tname))
     vault_url = 'http://localhost:8200'
+
     client = hvac.Client(url=vault_url, token=vault_token)
+    get_secret_backend(tname, client)
+    ret = get_dbconn(tname)
+    if not ret:
+        logging.warning('{0}:- Putting db handle false on queue'.format(tname))
+        sys_q.put(False)
+    else:
+        logging.warning('{0}:- Notifying all threads'.format(tname))
+        with v:
+            time.sleep(2)
+            v.notify_all()
+        with wait_q.mutex:
+            wait_q.queue.clear()
+
+def refresh_dbconn(tname, vault_token, refresh):
+    """function to connect to db and refresh the details on wake up"""
     while True:
         with u:
-            logging.warning('{0}:- Db thread Waiting on worker threads'.format(tname))
+            logging.warning('{0}:- Db thread Waiting on worker threads to request a new db handle'.format(tname))
             myret = u.wait()
-            logging.warning('{0}:- Woke up from a worker thread'.format(tname))            
             if myret:
-                with v:
-                    get_secret_backend(tname, client)
-                    ret = get_dbconn(tname)
-                    if not ret:
-                        logging.warning('{0}:- Putting db handle false on queue'.format(tname))
-                        sys_q.put(False)
-                    else:
-                        logging.warning('{0}:- Notifying all threads'.format(tname))
-                        time.sleep(2)
-                        v.notify_all()
-                        with wait_q.mutex:
-                            wait_q.queue.clear()
-                        
+                process_dbconn_request(tname, vault_token)
+
 def get_dbconn(tname):
    """ Connects to db and returns db connection """
    global conn
