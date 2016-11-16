@@ -61,6 +61,8 @@ def refresh_dbconn(tname, vault_token, refresh):
                     else:
                         logging.warning('{0}:- Notifying all threads'.format(tname))
                         v.notify_all()
+                        with wait_q.mutex:
+                            wait_q.queue.clear()
                         
 def get_dbconn(tname):
    """ Connects to db and returns db connection """
@@ -139,7 +141,7 @@ def get_someuser(cursor, tname):
    if not cursor:
        logging.warning('{0}:- No cursor here..'.format(tname))
        return False
-   sql = 'SELECT uname FROM test_users WHERE uname=\'testuser\' LIMIT 1';
+   sql = 'SELECT uname FROM test_users WHERE uname=\'ashay\' LIMIT 1';
    try:
        cursor.execute(sql)
    except Exception as ex:
@@ -147,7 +149,9 @@ def get_someuser(cursor, tname):
        logging.error('{0}:- Could not execite the statement. Exception: {1}'.format(tname, ex))
        return False
    else:
-       print('{0}:- Got User: {1}\n'.format(tname, cursor.fetchone()[0]))
+       data = cursor.fetchone()
+       if type(data) == list and len(data) > 0:
+           print('{0}:- Got User: {1}\n'.format(tname, data[0]))
        return True
 
 def parse_arguments():
