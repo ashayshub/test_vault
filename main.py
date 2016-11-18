@@ -14,6 +14,7 @@
 # 1. Db Thread: refreshes the db on other threads waking it up.
 # 2. Worker Thread: executes the sql statement, after receiving a dbconn on regular interval
 #   a. The first thread in worker threads is responsible for waking the Db Thread.
+# ToDo reduce the number of global vars
 
 import time
 import random
